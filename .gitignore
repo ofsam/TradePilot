@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.env
+frontend/node_modules/
+frontend/dist/
+runtime/
+share/
+*.zip
+
+# Local / corrupt filesystem paths
+backend/data/
+backend/_recover/app_mt5_execution.inv.txt
+
+*.log
+backend/_*.log
