@@ -33,7 +33,7 @@ export function Strategy() {
         <Detail label="Backtest entry" value="Return to the prior H1 high or low on a later bar" />
         <Detail label="Same-candle stop and target" value="Counted as a loss" />
         <Detail label="Market Watch" value="Reading a symbol selects it in the terminal" />
-        <Detail label="iPhone" value="Use this PC’s browser until login protection exists" />
+        <Detail label="Mobile" value="Use the TradePilot Expo app against your cloud VPS API" />
       </section>
     </div>
     <section className="panel">

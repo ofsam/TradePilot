@@ -3,7 +3,7 @@ import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -12,6 +12,7 @@ from sqlalchemy import text
 from app import auth, desk, models, notify  # noqa: F401
 from app.config import settings
 from app.db import engine, prepare_database
+from app.deps import is_auth_required, require_login
 from app.execution_gate import is_execution_enabled
 from app.mt5.adapter import MT5Unavailable, mt5_adapter
 from app.routers.strategy import router as strategy_router
@@ -218,11 +219,12 @@ def health():
         "execution_enabled": enabled,
         "mt5_mode": "execute" if enabled else "read_only",
         "database": "supabase" if engine is not None else "off",
+        "require_auth": is_auth_required(),
     }
 
 
 @app.get(f"{settings.api_prefix}/mt5/status")
-def status():
+def status(_email: str = Depends(require_login)):
     try:
         current = mt5_adapter.status()
     except MT5Unavailable as exc:
@@ -237,30 +239,30 @@ def status():
 
 
 @app.get(f"{settings.api_prefix}/notices")
-def notices():
+def notices(_email: str = Depends(require_login)):
     items = notify.list_notices()
     return {"items": items, "unread": sum(1 for row in items if not row.get("read"))}
 
 
 @app.post(f"{settings.api_prefix}/notices/read-all")
-def read_notices():
+def read_notices(_email: str = Depends(require_login)):
     notify.mark_all_read()
     return {"ok": True}
 
 
 @app.post(f"{settings.api_prefix}/notices/{{notice_id}}/read")
-def read_notice(notice_id: int):
+def read_notice(notice_id: int, _email: str = Depends(require_login)):
     notify.mark_read(notice_id)
     return {"ok": True}
 
 
 @app.get(f"{settings.api_prefix}/desk")
-def desk_state():
+def desk_state(_email: str = Depends(require_login)):
     return desk.state()
 
 
 @app.post(f"{settings.api_prefix}/desk/mode")
-def desk_mode(body: DeskMode):
+def desk_mode(body: DeskMode, _email: str = Depends(require_login)):
     if body.mode not in {"manual", "auto"}:
         raise HTTPException(status_code=422, detail="Mode must be manual or auto.")
     if body.mode == "auto":
@@ -277,13 +279,13 @@ def desk_mode(body: DeskMode):
 
 
 @app.post(f"{settings.api_prefix}/desk/symbols")
-def desk_symbols(body: DeskSymbols):
+def desk_symbols(body: DeskSymbols, _email: str = Depends(require_login)):
     desk.set_symbols(body.symbols)
     return desk.state()
 
 
 @app.post(f"{settings.api_prefix}/mt5/connect")
-def connect():
+def connect(_email: str = Depends(require_login)):
     try:
         return mt5_adapter.connect()
     except MT5Unavailable as exc:
@@ -291,12 +293,12 @@ def connect():
 
 
 @app.post(f"{settings.api_prefix}/mt5/disconnect")
-def disconnect():
+def disconnect(_email: str = Depends(require_login)):
     return mt5_adapter.disconnect()
 
 
 @app.get(f"{settings.api_prefix}/mt5/account")
-def account():
+def account(_email: str = Depends(require_login)):
     try:
         return mt5_adapter.status()
     except MT5Unavailable as exc:
@@ -304,7 +306,7 @@ def account():
 
 
 @app.get(f"{settings.api_prefix}/mt5/symbols")
-def symbols(symbols: list[str] = Query(default=["XAUUSD"])):
+def symbols(symbols: list[str] = Query(default=["XAUUSD"]), _email: str = Depends(require_login)):
     try:
         return {"items": mt5_adapter.symbols(symbols)}
     except MT5Unavailable as exc:
@@ -312,7 +314,7 @@ def symbols(symbols: list[str] = Query(default=["XAUUSD"])):
 
 
 @app.get(f"{settings.api_prefix}/mt5/tick")
-def tick(symbol: str = "XAUUSD"):
+def tick(symbol: str = "XAUUSD", _email: str = Depends(require_login)):
     chosen = symbol.strip()
     try:
         # Do not remember_symbol here: quote polls must not fight the Watchlist/Auto desk symbol.
@@ -322,7 +324,12 @@ def tick(symbol: str = "XAUUSD"):
 
 
 @app.get(f"{settings.api_prefix}/mt5/candles")
-def market_candles(symbol: str = "XAUUSD", timeframe: str = "H1", count: int = Query(default=48, ge=10, le=300)):
+def market_candles(
+    symbol: str = "XAUUSD",
+    timeframe: str = "H1",
+    count: int = Query(default=48, ge=10, le=300),
+    _email: str = Depends(require_login),
+):
     chosen = symbol.strip()
     if _SYMBOL.fullmatch(chosen) is None:
         raise HTTPException(status_code=422, detail="Enter a broker symbol such as XAUUSD.")
@@ -337,7 +344,7 @@ def market_candles(symbol: str = "XAUUSD", timeframe: str = "H1", count: int = Q
 
 
 @app.get(f"{settings.api_prefix}/mt5/positions")
-def positions():
+def positions(_email: str = Depends(require_login)):
     try:
         return {"items": mt5_adapter.positions()}
     except MT5Unavailable as exc:
@@ -345,7 +352,7 @@ def positions():
 
 
 @app.get(f"{settings.api_prefix}/database/status")
-def database_status():
+def database_status(_email: str = Depends(require_login)):
     try:
         with engine.connect() as connection:
             connection.execute(text("SELECT 1"))
@@ -355,7 +362,7 @@ def database_status():
 
 
 @app.post(f"{settings.api_prefix}/chat")
-def chat(body: ChatBody):
+def chat(body: ChatBody, _email: str = Depends(require_login)):
     from app import chat as desk_chat
 
     message = (body.message or "").strip()

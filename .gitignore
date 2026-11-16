@@ -4,6 +4,11 @@ __pycache__/
 .env
 frontend/node_modules/
 frontend/dist/
+mobile/node_modules/
+mobile/.expo/
+mobile/dist/
+!backend/_recover/pyc_backup/
+!backend/_recover/pyc_backup/**
 runtime/
 share/
 *.zip

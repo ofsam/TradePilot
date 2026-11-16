@@ -1,9 +1,26 @@
 import type { BacktestReport, CandleBar, ExecuteResult, PortfolioReport, Position, Rules, SavedBacktest, ScanResult, SignalRow, Status, Tick } from "./types"
 
 const BASE = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000"
+const SESSION_KEY = "tradepilot.session"
+
+export function getSessionToken(): string {
+  return localStorage.getItem(SESSION_KEY) || ""
+}
+
+export function setSessionToken(token: string) {
+  localStorage.setItem(SESSION_KEY, token)
+}
+
+export function clearSessionToken() {
+  localStorage.removeItem(SESSION_KEY)
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${BASE}${path}`, init)
+  const headers = new Headers(init?.headers || {})
+  const token = getSessionToken()
+  if (token && !headers.has("Authorization")) headers.set("Authorization", `Bearer ${token}`)
+  if (init?.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json")
+  const response = await fetch(`${BASE}${path}`, { ...init, headers })
   const text = await response.text()
   let body: unknown = null
   if (text) {
@@ -15,6 +32,20 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   return body as T
 }
+
+export const requestLoginCode = (email: string) =>
+  request<{ ok: boolean; email: string }>("/api/v1/auth/request", {
+    method: "POST",
+    body: JSON.stringify({ email, purpose: "login" }),
+  })
+
+export const verifyLoginCode = (email: string, code: string) =>
+  request<{ token: string; email: string }>("/api/v1/auth/verify", {
+    method: "POST",
+    body: JSON.stringify({ email, code, purpose: "login" }),
+  })
+
+export const getAuthMe = () => request<{ email: string }>("/api/v1/auth/me")
 
 export type DeskState = { mode: "manual" | "auto"; symbols: string[]; running: boolean }
 
