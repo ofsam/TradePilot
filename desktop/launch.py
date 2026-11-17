@@ -75,9 +75,14 @@ def ensure_api() -> None:
             python = alt
     env = dict(os.environ)
     env["PYTHONPATH"] = str(BACKEND)
-    log(f"Starting API with {python}")
+    host = (env.get("BIND_HOST") or "127.0.0.1").strip() or "127.0.0.1"
+    try:
+        port = int((env.get("BIND_PORT") or "8000").strip())
+    except ValueError:
+        port = 8000
+    log(f"Starting API with {python} on {host}:{port}")
     subprocess.Popen(
-        [str(python), "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8000"],
+        [str(python), "-m", "uvicorn", "app.main:app", "--host", host, "--port", str(port)],
         cwd=str(BACKEND),
         env=env,
         creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,

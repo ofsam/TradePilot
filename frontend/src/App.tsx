@@ -1,12 +1,13 @@
 import type { ReactNode } from "react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Activity, Brain, ChartCandlestick, History, LayoutDashboard, Moon, ShieldCheck, SlidersHorizontal, Sun, Wallet } from "lucide-react"
-import { connectMT5, disconnectMT5, executeDemo, getPositions, getStatus, getTick, scanMarket, setDeskSymbols } from "./api"
+import { clearSessionToken, connectMT5, disconnectMT5, executeDemo, getAuthMe, getPositions, getSessionToken, getStatus, getTick, scanMarket, setDeskSymbols } from "./api"
 import { price, validSymbol } from "./format"
 import { Backtest } from "./Backtest"
 import { Briefing } from "./Briefing"
 import { Intelligence } from "./Intelligence"
 import { Journal } from "./Journal"
+import { LoginGate } from "./LoginGate"
 import { Overview } from "./Overview"
 import { Portfolio } from "./Portfolio"
 import { Signals } from "./Signals"
@@ -24,6 +25,8 @@ const VIEWS: { id: View; label: string; icon: ReactNode }[] = [
 ]
 
 export default function App() {
+  const [sessionEmail, setSessionEmail] = useState<string | null>(null)
+  const [authReady, setAuthReady] = useState(false)
   const [view, setView] = useState<View>("overview")
   const [symbol, setSymbol] = useState(() => localStorage.getItem("tradepilot.symbol") || "XAUUSD")
   const [status, setStatus] = useState<Status | null>(null)
@@ -39,6 +42,30 @@ export default function App() {
   const [theme, setTheme] = useState<"dark" | "light">(() => localStorage.getItem("tradepilot.theme") === "light" ? "light" : "dark")
   const autoSent = useRef(new Set<string>())
   const autoRunning = useRef(false)
+
+  useEffect(() => {
+    let cancelled = false
+    async function boot() {
+      if (!getSessionToken()) {
+        if (!cancelled) {
+          setSessionEmail(null)
+          setAuthReady(true)
+        }
+        return
+      }
+      try {
+        const me = await getAuthMe()
+        if (!cancelled) setSessionEmail(me.email)
+      } catch {
+        clearSessionToken()
+        if (!cancelled) setSessionEmail(null)
+      } finally {
+        if (!cancelled) setAuthReady(true)
+      }
+    }
+    void boot()
+    return () => { cancelled = true }
+  }, [])
 
   function chooseTheme(next: "dark" | "light") {
     setTheme(next)
@@ -171,6 +198,8 @@ export default function App() {
   }
 
   const title = VIEWS.find(item => item.id === view)?.label ?? "Overview"
+  if (!authReady) return <div className="gate"><p>Checking this PC…</p></div>
+  if (!sessionEmail) return <LoginGate onDone={email => setSessionEmail(email)} />
   return <div className="shell">
     <aside className="sidebar">
       <div className="brand"><div className="mark"><ChartCandlestick /></div><div><b>TradePilot</b><small>MT5 CONTROL CENTER</small></div></div>
